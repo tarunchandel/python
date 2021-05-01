@@ -1,7 +1,6 @@
 import requests
 import datetime
 now = datetime.date.today()
-print()
 
 #for India
 print("For India: 18+ Vaccine availability")
