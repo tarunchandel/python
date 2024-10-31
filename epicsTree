@@ -1,0 +1,75 @@
+import requests
+
+# Constants
+GITLAB_URL = "https://gitlab.com"  # Change if using self-hosted GitLab
+GITLAB_API_URL = f"{GITLAB_URL}/api/v4"
+PRIVATE_TOKEN = "YOUR_PRIVATE_TOKEN"  # Your GitLab private access token
+PARENT_EPIC_ID = "YOUR_PARENT_EPIC_ID"  # Replace with your parent epic ID
+WIKI_PAGE_ID = "YOUR_WIKI_PAGE_ID"  # Replace with the target wiki page ID
+PROJECT_ID = "YOUR_PROJECT_ID"  # Replace with your project ID
+
+# Function to fetch epics under a parent epic
+def fetch_epics(parent_epic_id):
+    url = f"{GITLAB_API_URL}/epics/{parent_epic_id}/children"
+    headers = {
+        "PRIVATE-TOKEN": PRIVATE_TOKEN
+    }
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Failed to fetch epics: {response.status_code} - {response.text}")
+        return []
+
+# Function to build family tree
+def build_family_tree(epics):
+    tree = {}
+    for epic in epics:
+        tree[epic['id']] = {
+            "title": epic['name'],
+            "url": f"{GITLAB_URL}/{PROJECT_ID}/-/epics/{epic['id']}",
+            "description": epic.get('description', ''),
+            "sub_epics": build_family_tree(fetch_epics(epic['id']))  # Recursively fetch sub-epics
+        }
+    return tree
+
+# Function to format tree for wiki
+def format_tree_for_wiki(tree, indent=0):
+    formatted = ""
+    for epic_id, epic in tree.items():
+        formatted += " " * indent + f"- [{epic['title']}]({epic['url']})\n"
+        if epic['description']:
+            formatted += " " * (indent + 2) + f"{epic['description']}\n"
+        if epic['sub_epics']:
+            formatted += format_tree_for_wiki(epic['sub_epics'], indent + 2)
+    return formatted
+
+# Function to update GitLab wiki page
+def update_wiki_page(page_id, content):
+    url = f"{GITLAB_API_URL}/projects/{PROJECT_ID}/wikis/{page_id}"
+    headers = {
+        "PRIVATE-TOKEN": PRIVATE_TOKEN,
+        "Content-Type": "application/json"
+    }
+    data = {
+        "content": content
+    }
+    response = requests.put(url, headers=headers, json=data)
+
+    if response.status_code == 200:
+        print("Wiki page updated successfully.")
+    else:
+        print(f"Failed to update wiki page: {response.status_code} - {response.text}")
+
+# Main logic
+if __name__ == "__main__":
+    # Fetch epics and build the family tree
+    epics = fetch_epics(PARENT_EPIC_ID)
+    family_tree = build_family_tree(epics)
+
+    # Format the family tree for GitLab wiki
+    wiki_content = format_tree_for_wiki(family_tree)
+
+    # Update the wiki page with the family tree
+    update_wiki_page(WIKI_PAGE_ID, wiki_content)
